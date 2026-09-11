@@ -1,53 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyPassword, signToken } from "@/lib/auth";
+import { hashPassword, signToken } from "@/lib/auth";
 import { hashHwid, isValidHwid } from "@/lib/hwid";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password, hwid } = await req.json();
+    const { code, username, password, hwid } = await req.json();
 
-    if (!username || !password) {
+    if (!code || !username || !password) {
       return NextResponse.json({ error: "missing fields" }, { status: 400 });
     }
 
-    const user = await prisma.user.findUnique({ where: { username } });
-    if (!user) {
-      return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+    // Ищем инвайт
+    const invite = await prisma.invite.findUnique({ where: { code } });
+    if (!invite) {
+      return NextResponse.json({ error: "invalid invite" }, { status: 404 });
     }
-    if (user.banned) {
-      return NextResponse.json({ error: "banned" }, { status: 403 });
+    if (invite.usedBy) {
+      return NextResponse.json({ error: "invite already used" }, { status: 403 });
+    }
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      return NextResponse.json({ error: "invite expired" }, { status: 403 });
     }
 
-    const ok = await verifyPassword(password, user.password);
-    if (!ok) {
-      return NextResponse.json({ error: "invalid credentials" }, { status: 401 });
+    // Проверяем что юзернейм свободен
+    const existing = await prisma.user.findUnique({ where: { username } });
+    if (existing) {
+      return NextResponse.json({ error: "username taken" }, { status: 409 });
     }
 
     const ip = req.headers.get("x-forwarded-for") ?? undefined;
+    const hashedHwid = hwid && isValidHwid(hwid) ? hashHwid(hwid) : null;
 
-    if (hwid && isValidHwid(hwid)) {
-      const hashed = hashHwid(hwid);
-      if (!user.hwid) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { hwid: hashed, lastLogin: new Date(), lastIp: ip },
-        });
-        await prisma.log.create({
-          data: { userId: user.id, action: "hwid_bind", ip, hwid: hashed },
-        });
-      } else if (user.hwid !== hashed) {
-        return NextResponse.json({ error: "hwid mismatch" }, { status: 403 });
-      } else {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { lastLogin: new Date(), lastIp: ip },
-        });
-      }
+    // Считаем срок подписки
+    let subscriptionUntil: Date | null = null;
+    if (invite.subscriptionType && invite.subscriptionType !== "none") {
+      subscriptionUntil = new Date();
+      subscriptionUntil.setDate(subscriptionUntil.getDate() + 30); // 30 дней
     }
 
+    // Создаём юзера
+    const user = await prisma.user.create({
+      data: {
+        username,
+        password: await hashPassword(password),
+        hwid: hashedHwid,
+        inviteCode: code,
+        subscriptionType: invite.subscriptionType ?? "none",
+        subscriptionUntil,
+        lastLogin: new Date(),
+        lastIp: ip,
+      },
+    });
+
+    // Помечаем инвайт использованным
+    await prisma.invite.update({
+      where: { id: invite.id },
+      data: { usedBy: user.id, usedAt: new Date() },
+    });
+
     await prisma.log.create({
-      data: { userId: user.id, action: "login", ip },
+      data: { userId: user.id, action: "register", ip, hwid: hashedHwid ?? undefined },
     });
 
     const token = signToken({ uid: user.id, username: user.username, role: user.role });
@@ -55,7 +68,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       token,
-      user: { id: user.id, username: user.username, role: user.role },
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        subscriptionType: user.subscriptionType,
+        subscriptionUntil: user.subscriptionUntil,
+      },
     });
   } catch (e) {
     console.error(e);
