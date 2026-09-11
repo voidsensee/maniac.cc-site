@@ -68,8 +68,7 @@ export async function POST(req: NextRequest) {
         subscriptionUntil: user.subscriptionUntil ?? null,
       },
     });
-  } catch (e) {
+    } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "server error" }, { status: 500 });
   }
-}
