@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  password      String
+  hwid          String?   @unique
+  role          String    @default("user")
+  banned        Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  lastLogin     DateTime?
+  lastIp        String?
+  hwidResets    Int       @default(0)
+  inviteCode    String?   @unique
+  logs          Log[]
+}
+
+model Invite {
+  id         String    @id @default(cuid())
+  code       String    @unique
+  createdBy  String?
+  usedBy     String?   @unique
+  usedAt     DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+model Log {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  ip         String?
+  hwid       String?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
