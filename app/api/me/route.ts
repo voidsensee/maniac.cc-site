@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
       lastLogin: true,
       lastIp: true,
       hwidResets: true,
+      subscriptionType: true,
+      subscriptionUntil: true,
     },
   });
 
