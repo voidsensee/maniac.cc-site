@@ -24,7 +24,7 @@ export default function Home() {
           </h1>
 
           <p className="animate-fade-in mt-6 max-w-xl text-lg text-white/60">
-            Premium software for the next generation. Invite-only. Undetected. Reliable.
+            Premium software, built for performance. Invite-only access.
           </p>
 
           <div className="animate-fade-in mt-10 flex flex-wrap items-center justify-center gap-4">
@@ -36,7 +36,7 @@ export default function Home() {
             </Link>
             <Link
               href="/login"
-              className="glass rounded-lg px-8 py-3 font-medium text-white/80 hover:text-white transition"
+              className="glass rounded-lg px-8 py-3 font-medium text-white/80 transition hover:text-white"
             >
               Login
             </Link>
@@ -47,7 +47,7 @@ export default function Home() {
           {[
             { title: "Undetected", desc: "Built for stability. Bypasses modern anti-cheat." },
             { title: "Invite-Only", desc: "No public access. Users are hand-picked." },
-            { title: "HWID Locked", desc: "Your account is bound to your hardware." },
+            { title: "Support 24/7", desc: "Our team is always ready to help you." },
           ].map((f) => (
             <div
               key={f.title}
