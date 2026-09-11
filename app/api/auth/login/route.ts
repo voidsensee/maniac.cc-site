@@ -68,11 +68,15 @@ export async function POST(req: NextRequest) {
         subscriptionUntil: user.subscriptionUntil ?? null,
       },
     });
-     } catch (e) {
+  } catch (e) {
     console.error("[login] error:", e);
-    return NextResponse.json({
-      error: "server error",
-      details: String(e),
-      stack: e instanceof Error ? e.stack : undefined,
-    }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: "server error",
+        details: String(e),
+        stack: e instanceof Error ? e.stack : undefined,
+      },
+      { status: 500 }
+    );
   }
+}
