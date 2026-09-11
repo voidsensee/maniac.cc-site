@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, signToken } from "@/lib/auth";
+import { hashHwid, isValidHwid } from "@/lib/hwid";
+import { calculateSubscriptionUntil } from "@/lib/subscriptions";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password, invite } = await req.json();
+    const { username, password, invite, hwid } = await req.json();
 
     if (!username || !password || !invite) {
       return NextResponse.json({ error: "missing fields" }, { status: 400 });
@@ -32,10 +34,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "username taken" }, { status: 409 });
     }
 
-    const hash = await hashPassword(password);
+    const ip = req.headers.get("x-forwarded-for") ?? undefined;
+    const hashedHwid = hwid && isValidHwid(hwid) ? hashHwid(hwid) : null;
+
+    const subscriptionType = inviteRow.subscriptionType ?? "none";
+    const subscriptionUntil = calculateSubscriptionUntil(subscriptionType);
 
     const user = await prisma.user.create({
-      data: { username, password: hash, inviteCode: invite },
+      data: {
+        username,
+        password: await hashPassword(password),
+        hwid: hashedHwid,
+        inviteCode: invite,
+        subscriptionType,
+        subscriptionUntil,
+        lastLogin: new Date(),
+        lastIp: ip,
+      },
     });
 
     await prisma.invite.update({
@@ -47,13 +62,24 @@ export async function POST(req: NextRequest) {
       data: {
         userId: user.id,
         action: "register",
-        ip: req.headers.get("x-forwarded-for") ?? undefined,
+        ip,
+        hwid: hashedHwid ?? undefined,
       },
     });
 
     const token = signToken({ uid: user.id, username: user.username, role: user.role });
 
-    return NextResponse.json({ ok: true, token, user: { id: user.id, username: user.username, role: user.role } });
+    return NextResponse.json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        subscriptionType: user.subscriptionType,
+        subscriptionUntil: user.subscriptionUntil,
+      },
+    });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "server error" }, { status: 500 });
