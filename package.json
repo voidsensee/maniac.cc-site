@@ -2,14 +2,13 @@
   "name": "maniac-site",
   "version": "1.0.0",
   "private": true,
- "scripts": {
-  "dev": "next dev",
-  "build": "prisma generate --schema=lib/prisma/schema.prisma && next build",
-  "start": "next start",
-  "lint": "next lint",
-  "seed": "tsx lib/prisma/seed.ts",
-  "postinstall": "prisma generate --schema=lib/prisma/schema.prisma"
-}
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate --schema=lib/prisma/schema.prisma && next build",
+    "start": "next start",
+    "lint": "next lint",
+    "seed": "tsx lib/prisma/seed.ts",
+    "postinstall": "prisma generate --schema=lib/prisma/schema.prisma"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
