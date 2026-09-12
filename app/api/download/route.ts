@@ -38,25 +38,42 @@ export async function GET(req: NextRequest) {
     select: { banned: true, subscriptionUntil: true, hwid: true },
   });
 
-  if (!user) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
-  }
-  if (user.banned) {
-    return NextResponse.json({ error: "banned" }, { status: 403 });
-  }
-  if (!user.hwid) {
-    return NextResponse.json({ error: "hwid not bound" }, { status: 403 });
-  }
+  if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (user.banned) return NextResponse.json({ error: "banned" }, { status: 403 });
+  if (!user.hwid) return NextResponse.json({ error: "hwid not bound" }, { status: 403 });
   if (user.subscriptionUntil && new Date(user.subscriptionUntil) < new Date()) {
     return NextResponse.json({ error: "subscription expired" }, { status: 403 });
   }
 
-  const upstream = await fetch(LOADER_ZIP_URL, {
-    cache: "no-store",
-    redirect: "follow",
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(LOADER_ZIP_URL, {
+      cache: "no-store",
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        Accept: "application/octet-stream,application/zip,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "fetch failed", detail: String(e?.message || e) },
+      { status: 502 }
+    );
+  }
+
   if (!upstream.ok) {
-    return NextResponse.json({ error: "loader unavailable" }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: "loader unavailable",
+        status: upstream.status,
+        statusText: upstream.statusText,
+        finalUrl: upstream.url,
+      },
+      { status: 502 }
+    );
   }
 
   const zipBuf = Buffer.from(await upstream.arrayBuffer());
@@ -77,8 +94,6 @@ export async function GET(req: NextRequest) {
 
   const name = NAMES[Math.floor(Math.random() * NAMES.length)];
   const asciiName = name.replace(/[^\x20-\x7E]/g, "_");
-
-  // ВАЖНО: Buffer → Uint8Array, иначе TS ругается на BodyInit
   const body = new Uint8Array(exeBuf);
 
   return new NextResponse(body, {
