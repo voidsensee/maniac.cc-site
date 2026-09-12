@@ -13,7 +13,7 @@ model User {
   username          String    @unique
   password          String
   hwid              String?   @unique
-  role              String    @default("user") // user | support | admin
+  role              String    @default("user")
   banned            Boolean   @default(false)
   createdAt         DateTime  @default(now())
   lastLogin         DateTime?
@@ -23,9 +23,11 @@ model User {
   inviteCode        String?   @unique
   subscriptionType  String?
   subscriptionUntil DateTime?
+  balance           Int       @default(0)
   logs              Log[]
   tickets           Ticket[]
   messages          Message[]
+  transactions      Transaction[]
 }
 
 model Invite {
@@ -57,7 +59,7 @@ model Ticket {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject   String
-  status    String    @default("open") // open | closed
+  status    String    @default("open")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
@@ -77,4 +79,18 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([ticketId])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  type      String
+  reason    String?
+  adminId   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([type])
 }
