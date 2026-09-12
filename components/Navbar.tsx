@@ -21,7 +21,13 @@ export default function Navbar() {
     window.location.href = "/";
   };
 
-  const isStaff = user?.role === "admin" || user?.role === "support";
+  const isStaff =
+    user?.role === "admin" ||
+    user?.role === "founder" ||
+    user?.role === "support" ||
+    user?.role === "moderator" ||
+    user?.role === "developer" ||
+    user?.role === "finance";
 
   return (
     <nav className="glass sticky top-0 z-50 border-b border-white/5">
