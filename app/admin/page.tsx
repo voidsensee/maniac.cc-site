@@ -84,19 +84,35 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const userAction = async (userId: string, action: string) => {
+  const userAction = async (userId: string, action: string, extra?: Record<string, any>) => {
     const t = token();
     if (!t) return;
     const res = await fetch("/api/admin/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
-      body: JSON.stringify({ userId, action }),
+      body: JSON.stringify({ userId, action, ...extra }),
     });
     if (!res.ok) {
       const d = await res.json();
       alert(d.error || "failed");
     }
     await loadUsers();
+  };
+
+  const changeUsername = async (u: User) => {
+    const newName = prompt(`New username for ${u.username}:`, u.username);
+    if (!newName || newName === u.username) return;
+    await userAction(u.id, "change_username", { username: newName });
+  };
+
+  const changePassword = async (u: User) => {
+    const newPass = prompt(`New password for ${u.username}:`);
+    if (!newPass) return;
+    if (newPass.length < 6) {
+      alert("Password must be at least 6 characters");
+      return;
+    }
+    await userAction(u.id, "change_password", { password: newPass });
   };
 
   const generateInvites = async () => {
@@ -140,6 +156,13 @@ export default function Admin() {
 
   const isAdmin = me?.role === "admin";
 
+  const SUB_LABELS: Record<string, string> = {
+    none: "—",
+    gta_v_altv_7d: "7d",
+    gta_v_altv_30d: "30d",
+    gta_v_altv_lifetime: "lifetime",
+  };
+
   return (
     <>
       <Starfield />
@@ -178,6 +201,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wider text-white/40">
+                  <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">Username</th>
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Sub</th>
@@ -190,12 +214,17 @@ export default function Admin() {
               <tbody>
                 {users.map((u) => (
                   <tr key={u.id} className="border-b border-white/5 hover:bg-white/5">
+                    <td className="px-4 py-3 font-mono text-[10px] text-white/30">
+                      {u.id.slice(0, 8)}
+                    </td>
                     <td className="px-4 py-3 font-medium">{u.username}</td>
                     <td className="px-4 py-3 text-white/60">{u.role}</td>
-                    <td className="px-4 py-3 text-white/60">{u.subscriptionType || "—"}</td>
+                    <td className="px-4 py-3 text-white/60">
+                      {SUB_LABELS[u.subscriptionType || "none"] || u.subscriptionType || "—"}
+                    </td>
                     <td className="px-4 py-3 text-xs text-white/50">
-                      {u.subscriptionType === "lifetime"
-                        ? "forever"
+                      {u.subscriptionType?.endsWith("_lifetime")
+                        ? "∞"
                         : u.subscriptionUntil
                         ? new Date(u.subscriptionUntil).toLocaleDateString()
                         : "—"}
@@ -224,6 +253,8 @@ export default function Admin() {
                             <Btn onClick={() => userAction(u.id, "give_30d")}>+30d</Btn>
                             <Btn onClick={() => userAction(u.id, "give_lifetime")}>+Life</Btn>
                             <Btn onClick={() => userAction(u.id, "revoke_sub")}>Revoke</Btn>
+                            <Btn onClick={() => changeUsername(u)}>✎ Name</Btn>
+                            <Btn onClick={() => changePassword(u)}>✎ Pass</Btn>
                             {u.role === "user" && (
                               <>
                                 <Btn onClick={() => userAction(u.id, "make_support")}>+Support</Btn>
