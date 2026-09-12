@@ -1,4 +1,3 @@
-// app/api/download/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import AdmZip from "adm-zip";
 import { prisma } from "@/lib/prisma";
@@ -29,26 +28,29 @@ const LOADER_ZIP_URL =
   "https://github.com/voidsensee/maniac.cc-site/releases/download/untagged-7415eab3eb973060b34f/loader.zip";
 
 export async function GET(req: NextRequest) {
-  // 1. Auth
   const auth = getAuthUser(req);
   if (!auth) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  // 2. Проверка юзера
   const user = await prisma.user.findUnique({
     where: { id: auth.uid },
     select: { banned: true, subscriptionUntil: true, hwid: true },
   });
 
-  if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (user.banned) return NextResponse.json({ error: "banned" }, { status: 403 });
-  if (!user.hwid) return NextResponse.json({ error: "hwid not bound" }, { status: 403 });
+  if (!user) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  if (user.banned) {
+    return NextResponse.json({ error: "banned" }, { status: 403 });
+  }
+  if (!user.hwid) {
+    return NextResponse.json({ error: "hwid not bound" }, { status: 403 });
+  }
   if (user.subscriptionUntil && new Date(user.subscriptionUntil) < new Date()) {
     return NextResponse.json({ error: "subscription expired" }, { status: 403 });
   }
 
-  // 3. Качаем zip с GitHub Releases
   const upstream = await fetch(LOADER_ZIP_URL, {
     cache: "no-store",
     redirect: "follow",
@@ -57,7 +59,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "loader unavailable" }, { status: 502 });
   }
 
-  // 4. Распаковываем в памяти
   const zipBuf = Buffer.from(await upstream.arrayBuffer());
   let exeBuf: Buffer | null = null;
   try {
@@ -74,17 +75,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "exe not found in archive" }, { status: 500 });
   }
 
-  // 5. Рандомное имя
   const name = NAMES[Math.floor(Math.random() * NAMES.length)];
   const asciiName = name.replace(/[^\x20-\x7E]/g, "_");
 
-  // 6. Отдаём
-  return new NextResponse(exeBuf, {
+  // ВАЖНО: Buffer → Uint8Array, иначе TS ругается на BodyInit
+  const body = new Uint8Array(exeBuf);
+
+  return new NextResponse(body, {
     status: 200,
     headers: {
       "Content-Type": "application/x-msdownload",
       "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`,
-      "Content-Length": String(exeBuf.length),
+      "Content-Length": String(body.length),
       "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
       "X-Content-Type-Options": "nosniff",
     },
