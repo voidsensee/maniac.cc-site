@@ -45,6 +45,9 @@ export default function Navbar() {
               <Link href="/shop" className="text-white/70 transition hover:text-white">
                 Shop
               </Link>
+              <Link href="/changelog" className="text-white/70 transition hover:text-white">
+                Changelog
+              </Link>
               <Link href="/tickets" className="text-white/70 transition hover:text-white">
                 Support
               </Link>
@@ -74,6 +77,9 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              <Link href="/changelog" className="text-white/70 transition hover:text-white">
+                Changelog
+              </Link>
               <Link href="/login" className="text-white/70 transition hover:text-white">
                 Login
               </Link>
