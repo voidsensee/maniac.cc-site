@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Starfield from "@/components/Starfield";
 import Navbar from "@/components/Navbar";
+import { toast } from "sonner";
+import { formatMani } from "@/lib/currency";
 
 type User = {
   id: string;
@@ -18,6 +20,7 @@ type User = {
   hwidResets: number;
   subscriptionType: string | null;
   subscriptionUntil: string | null;
+  balance: number;
 };
 
 type Invite = {
@@ -28,6 +31,13 @@ type Invite = {
   usedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+};
+
+const SUB_LABELS: Record<string, string> = {
+  none: "—",
+  gta_v_altv_7d: "7d",
+  gta_v_altv_30d: "30d",
+  gta_v_altv_lifetime: "lifetime",
 };
 
 export default function Admin() {
@@ -84,7 +94,11 @@ export default function Admin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const userAction = async (userId: string, action: string, extra?: Record<string, any>) => {
+  const userAction = async (
+    userId: string,
+    action: string,
+    extra?: Record<string, any>
+  ) => {
     const t = token();
     if (!t) return;
     const res = await fetch("/api/admin/users", {
@@ -92,9 +106,11 @@ export default function Admin() {
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
       body: JSON.stringify({ userId, action, ...extra }),
     });
+    const d = await res.json();
     if (!res.ok) {
-      const d = await res.json();
-      alert(d.error || "failed");
+      toast.error(d.error || "failed");
+    } else {
+      toast.success("Done");
     }
     await loadUsers();
   };
@@ -108,11 +124,26 @@ export default function Admin() {
   const changePassword = async (u: User) => {
     const newPass = prompt(`New password for ${u.username}:`);
     if (!newPass) return;
-    if (newPass.length < 6) {
-      alert("Password must be at least 6 characters");
-      return;
-    }
+    if (newPass.length < 6) return toast.error("min 6 chars");
     await userAction(u.id, "change_password", { password: newPass });
+  };
+
+  const addBalance = async (u: User) => {
+    const amt = prompt(`Add Mani to ${u.username}:`, "100");
+    if (!amt) return;
+    await userAction(u.id, "add_balance", { amount: Number(amt) });
+  };
+
+  const removeBalance = async (u: User) => {
+    const amt = prompt(`Remove Mani from ${u.username}:`, "100");
+    if (!amt) return;
+    await userAction(u.id, "remove_balance", { amount: Number(amt) });
+  };
+
+  const setBalance = async (u: User) => {
+    const amt = prompt(`Set Mani for ${u.username}:`, String(u.balance));
+    if (!amt) return;
+    await userAction(u.id, "set_balance", { amount: Number(amt) });
   };
 
   const generateInvites = async () => {
@@ -155,13 +186,6 @@ export default function Admin() {
   }
 
   const isAdmin = me?.role === "admin";
-
-  const SUB_LABELS: Record<string, string> = {
-    none: "—",
-    gta_v_altv_7d: "7d",
-    gta_v_altv_30d: "30d",
-    gta_v_altv_lifetime: "lifetime",
-  };
 
   return (
     <>
@@ -206,6 +230,7 @@ export default function Admin() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Sub</th>
                   <th className="px-4 py-3">Until</th>
+                  <th className="px-4 py-3">Balance</th>
                   <th className="px-4 py-3">HWID</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
@@ -220,7 +245,9 @@ export default function Admin() {
                     <td className="px-4 py-3 font-medium">{u.username}</td>
                     <td className="px-4 py-3 text-white/60">{u.role}</td>
                     <td className="px-4 py-3 text-white/60">
-                      {SUB_LABELS[u.subscriptionType || "none"] || u.subscriptionType || "—"}
+                      {SUB_LABELS[u.subscriptionType || "none"] ||
+                        u.subscriptionType ||
+                        "—"}
                     </td>
                     <td className="px-4 py-3 text-xs text-white/50">
                       {u.subscriptionType?.endsWith("_lifetime")
@@ -228,6 +255,9 @@ export default function Admin() {
                         : u.subscriptionUntil
                         ? new Date(u.subscriptionUntil).toLocaleDateString()
                         : "—"}
+                    </td>
+                    <td className="px-4 py-3 font-mono text-xs text-amber-300">
+                      {formatMani(u.balance)}
                     </td>
                     <td className="px-4 py-3 font-mono text-xs text-white/50">
                       {u.hwid ? u.hwid.slice(0, 10) + "..." : "—"}
@@ -253,22 +283,35 @@ export default function Admin() {
                             <Btn onClick={() => userAction(u.id, "give_30d")}>+30d</Btn>
                             <Btn onClick={() => userAction(u.id, "give_lifetime")}>+Life</Btn>
                             <Btn onClick={() => userAction(u.id, "revoke_sub")}>Revoke</Btn>
+                            <Btn onClick={() => addBalance(u)}>+Ɱ</Btn>
+                            <Btn onClick={() => removeBalance(u)}>-Ɱ</Btn>
+                            <Btn onClick={() => setBalance(u)}>=Ɱ</Btn>
                             <Btn onClick={() => changeUsername(u)}>✎ Name</Btn>
                             <Btn onClick={() => changePassword(u)}>✎ Pass</Btn>
                             {u.role === "user" && (
                               <>
-                                <Btn onClick={() => userAction(u.id, "make_support")}>+Support</Btn>
-                                <Btn onClick={() => userAction(u.id, "make_admin")}>+Admin</Btn>
+                                <Btn onClick={() => userAction(u.id, "make_support")}>
+                                  +Support
+                                </Btn>
+                                <Btn onClick={() => userAction(u.id, "make_admin")}>
+                                  +Admin
+                                </Btn>
                               </>
                             )}
                             {u.role === "support" && (
                               <>
-                                <Btn onClick={() => userAction(u.id, "make_user")}>-Support</Btn>
-                                <Btn onClick={() => userAction(u.id, "make_admin")}>+Admin</Btn>
+                                <Btn onClick={() => userAction(u.id, "make_user")}>
+                                  -Support
+                                </Btn>
+                                <Btn onClick={() => userAction(u.id, "make_admin")}>
+                                  +Admin
+                                </Btn>
                               </>
                             )}
                             {u.role === "admin" && (
-                              <Btn onClick={() => userAction(u.id, "make_user")}>-Admin</Btn>
+                              <Btn onClick={() => userAction(u.id, "make_user")}>
+                                -Admin
+                              </Btn>
                             )}
                           </>
                         )}
@@ -284,7 +327,9 @@ export default function Admin() {
         {tab === "invites" && (
           <>
             <div className="glass animate-fade-in mt-6 rounded-2xl p-6">
-              <h2 className="text-sm uppercase tracking-wider text-white/40">Generate invites</h2>
+              <h2 className="text-sm uppercase tracking-wider text-white/40">
+                Generate invites
+              </h2>
               <div className="mt-4 flex flex-wrap items-end gap-4">
                 <div>
                   <label className="mb-1 block text-xs text-white/40">Count</label>
