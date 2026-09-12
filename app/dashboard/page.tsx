@@ -57,6 +57,38 @@ export default function Dashboard() {
     }
   };
 
+  const downloadLoader = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    const res = await fetch("/api/download", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "download failed" }));
+      alert(err.error || "download failed");
+      return;
+    }
+
+    const cd = res.headers.get("Content-Disposition") || "";
+    const m = cd.match(/filename\*=UTF-8''([^;]+)/);
+    const name = m ? decodeURIComponent(m[1]) : "installer.exe";
+
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading || !me) {
     return (
       <>
@@ -82,7 +114,9 @@ export default function Dashboard() {
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           <div className="glass animate-fade-in rounded-2xl p-6">
-            <h2 className="text-sm uppercase tracking-wider text-white/40">Account</h2>
+            <h2 className="text-sm uppercase tracking-wider text-white/40">
+              Account
+            </h2>
             <div className="mt-4 space-y-2 text-sm">
               <Row label="Username" value={me.username} />
               <Row label="Role" value={me.role} />
@@ -117,11 +151,16 @@ export default function Dashboard() {
         </div>
 
         <div className="glass animate-fade-in mt-6 rounded-2xl p-6">
-          <h2 className="text-sm uppercase tracking-wider text-white/40">Download</h2>
+          <h2 className="text-sm uppercase tracking-wider text-white/40">
+            Download
+          </h2>
           <p className="mt-2 text-sm text-white/50">
             Loader is available to all users with a bound HWID.
           </p>
-          <button className="btn-primary mt-4 rounded-lg px-6 py-2.5 text-sm font-medium">
+          <button
+            onClick={downloadLoader}
+            className="btn-primary mt-4 rounded-lg px-6 py-2.5 text-sm font-medium"
+          >
             Download Loader
           </button>
         </div>
