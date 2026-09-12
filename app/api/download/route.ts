@@ -25,7 +25,7 @@ const NAMES = [
 ];
 
 const LOADER_ZIP_URL =
-  "https://github.com/voidsensee/maniac.cc-site/releases/download/untagged-7415eab3eb973060b34f/loader.zip";
+  "https://github.com/voidsensee/maniac.cc-site/releases/download/loader/loader.zip";
 
 export async function GET(req: NextRequest) {
   const auth = getAuthUser(req);
@@ -35,14 +35,19 @@ export async function GET(req: NextRequest) {
 
   const user = await prisma.user.findUnique({
     where: { id: auth.uid },
-    select: { banned: true, subscriptionUntil: true, hwid: true },
+    select: { banned: true, subscriptionUntil: true, subscriptionType: true, hwid: true },
   });
 
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (user.banned) return NextResponse.json({ error: "banned" }, { status: 403 });
   if (!user.hwid) return NextResponse.json({ error: "hwid not bound" }, { status: 403 });
-  if (user.subscriptionUntil && new Date(user.subscriptionUntil) < new Date()) {
-    return NextResponse.json({ error: "subscription expired" }, { status: 403 });
+
+  const subType = user.subscriptionType || "none";
+  const isLifetime = subType.endsWith("_lifetime");
+  if (!isLifetime) {
+    if (!user.subscriptionUntil || new Date(user.subscriptionUntil) < new Date()) {
+      return NextResponse.json({ error: "subscription expired" }, { status: 403 });
+    }
   }
 
   let upstream: Response;
