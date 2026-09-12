@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/auth";
 import { MANI_TO_DAYS } from "@/lib/currency";
+import { payoutReferral } from "@/lib/referral";
 
 export async function POST(req: NextRequest) {
   const auth = getAuthUser(req);
@@ -17,12 +18,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "insufficient balance" }, { status: 400 });
   }
 
-  // Определяем новую дату окончания
   let newUntil: Date | null = null;
   let newType = user.subscriptionType || "none";
 
   if (item.days === -1) {
-    // Lifetime
     newType = "gta_v_altv_lifetime";
     newUntil = null;
   } else {
@@ -35,7 +34,6 @@ export async function POST(req: NextRequest) {
     newType = item.days === 7 ? "gta_v_altv_7d" : "gta_v_altv_30d";
   }
 
-  // Атомарно: списать Mani + обновить подписку + записать транзакцию
   await prisma.$transaction([
     prisma.user.update({
       where: { id: auth.uid },
@@ -58,5 +56,7 @@ export async function POST(req: NextRequest) {
     }),
   ]);
 
-  return NextResponse.json({ ok: true });
+  const bonus = await payoutReferral(auth.uid, price, item.label);
+
+  return NextResponse.json({ ok: true, referralBonus: bonus });
 }
