@@ -9,25 +9,28 @@ datasource db {
 }
 
 model User {
-  id                String    @id @default(cuid())
-  username          String    @unique
-  password          String
-  hwid              String?   @unique
-  role              String    @default("user")
-  banned            Boolean   @default(false)
-  createdAt         DateTime  @default(now())
-  lastLogin         DateTime?
-  lastIp            String?
-  hwidResets        Int       @default(0)
-  lastHwidReset     DateTime?
-  inviteCode        String?   @unique
-  subscriptionType  String?
-  subscriptionUntil DateTime?
-  balance           Int       @default(0)
-  logs              Log[]
-  tickets           Ticket[]
-  messages          Message[]
-  transactions      Transaction[]
+  id                    String    @id @default(cuid())
+  username              String    @unique
+  password              String
+  hwid                  String?   @unique
+  role                  String    @default("user")
+  banned                Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  lastLogin             DateTime?
+  lastIp                String?
+  hwidResets            Int       @default(0)
+  lastHwidReset         DateTime?
+  inviteCode            String?   @unique
+  subscriptionType      String?
+  subscriptionUntil     DateTime?
+  balance               Int       @default(0)
+  referredBy            String?
+  referralEarnings      Int       @default(0)
+  lastInviteGeneratedAt DateTime?
+  logs                  Log[]
+  tickets               Ticket[]
+  messages              Message[]
+  transactions          Transaction[]
 }
 
 model Invite {
@@ -35,6 +38,7 @@ model Invite {
   code             String    @unique
   createdBy        String?
   usedBy           String?   @unique
+  usedById         String?
   usedAt           DateTime?
   expiresAt        DateTime?
   createdAt        DateTime  @default(now())
