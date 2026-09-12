@@ -244,7 +244,9 @@ export default function Dashboard() {
                     <div className="text-xs uppercase tracking-wider text-white/40">
                       {item.label}
                     </div>
-                    <div className="mt-2 text-lg font-bold">{formatMani(Number(price))}</div>
+                    <div className="mt-2 text-lg font-bold">
+                      {formatMani(Number(price))}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -283,7 +285,7 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
           <button
             onClick={() => router.push("/password")}
             className="glass animate-fade-in rounded-2xl p-6 text-left hover:border-accent-purple transition"
@@ -300,6 +302,15 @@ export default function Dashboard() {
             <h2 className="text-sm uppercase tracking-wider text-white/40">Support</h2>
             <p className="mt-2 text-base font-medium">Tickets</p>
             <p className="mt-1 text-xs text-white/40">Open or view your support tickets</p>
+          </button>
+
+          <button
+            onClick={() => router.push("/invites")}
+            className="glass animate-fade-in rounded-2xl p-6 text-left hover:border-accent-purple transition"
+          >
+            <h2 className="text-sm uppercase tracking-wider text-white/40">Referral</h2>
+            <p className="mt-2 text-base font-medium">Invites</p>
+            <p className="mt-1 text-xs text-white/40">Earn 10% from your friends</p>
           </button>
         </div>
       </main>
