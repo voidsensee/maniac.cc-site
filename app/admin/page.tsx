@@ -8,6 +8,8 @@ import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { formatMani } from "@/lib/currency";
 import { ROLES } from "@/lib/roles";
+import { STATUS_LIST } from "@/lib/status";
+import { StatusBadge } from "@/components/StatusBadge";
 
 type User = {
   id: string;
@@ -53,7 +55,7 @@ const ASSIGNABLE_ROLES = [
 
 export default function Admin() {
   const router = useRouter();
-  const [tab, setTab] = useState<"users" | "invites">("users");
+  const [tab, setTab] = useState<"users" | "invites" | "status">("users");
   const [me, setMe] = useState<{ role: string } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -61,6 +63,11 @@ export default function Admin() {
   const [inviteCount, setInviteCount] = useState(1);
   const [inviteTtl, setInviteTtl] = useState(0);
   const [generating, setGenerating] = useState(false);
+
+  // status
+  const [statusState, setStatusState] = useState("undetected");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [statusSaving, setStatusSaving] = useState(false);
 
   const token = () => localStorage.getItem("token");
 
@@ -93,10 +100,20 @@ export default function Admin() {
     setInvites(d.invites);
   };
 
+  const loadStatus = async () => {
+    const res = await fetch("/api/status");
+    if (res.ok) {
+      const d = await res.json();
+      setStatusState(d.status.state);
+      setStatusMessage(d.status.message || "");
+    }
+  };
+
   const load = async () => {
     await loadMe();
     await loadUsers();
     await loadInvites();
+    await loadStatus();
     setLoading(false);
   };
 
@@ -185,6 +202,30 @@ export default function Admin() {
     await loadInvites();
   };
 
+  const saveStatus = async () => {
+    const t = token();
+    if (!t) return;
+    setStatusSaving(true);
+    try {
+      const res = await fetch("/api/admin/status", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({ state: statusState, message: statusMessage }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success("Status updated");
+      } else {
+        toast.error(d.error || "failed");
+      }
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
   const copy = (text: string) => navigator.clipboard.writeText(text);
 
   if (loading) {
@@ -226,6 +267,14 @@ export default function Admin() {
             }`}
           >
             Invites ({invites.length})
+          </button>
+          <button
+            onClick={() => setTab("status")}
+            className={`rounded-lg px-4 py-2 text-sm transition ${
+              tab === "status" ? "btn-primary" : "glass text-white/70 hover:text-white"
+            }`}
+          >
+            Status
           </button>
           <Link
             href="/admin/tickets"
@@ -436,6 +485,66 @@ export default function Admin() {
               </table>
             </div>
           </>
+        )}
+
+        {tab === "status" && isAdmin && (
+          <div className="glass animate-fade-in mt-6 rounded-2xl p-6">
+            <h2 className="text-sm uppercase tracking-wider text-white/40">
+              Cheat status
+            </h2>
+            <p className="mt-2 text-xs text-white/40">
+              Set the current status of the cheat. Visible on every user's dashboard.
+            </p>
+
+            <div className="mt-6 max-w-2xl space-y-5">
+              <div>
+                <label className="mb-2 block text-xs uppercase tracking-wider text-white/40">
+                  State
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {STATUS_LIST.map((s) => (
+                    <button
+                      key={s.value}
+                      type="button"
+                      onClick={() => setStatusState(s.value)}
+                      className={`rounded-lg border p-3 text-left transition ${
+                        statusState === s.value
+                          ? "border-accent-purple bg-accent-purple/10"
+                          : "border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{s.label}</span>
+                        <StatusBadge state={s.value} size="sm" />
+                      </div>
+                      <p className="mt-1 text-[11px] text-white/40">{s.hint}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-xs uppercase tracking-wider text-white/40">
+                  Message (optional)
+                </label>
+                <textarea
+                  value={statusMessage}
+                  onChange={(e) => setStatusMessage(e.target.value)}
+                  placeholder="e.g. Waiting for game update..."
+                  rows={3}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm"
+                />
+              </div>
+
+              <button
+                onClick={saveStatus}
+                disabled={statusSaving}
+                className="btn-primary rounded-lg px-6 py-2.5 text-sm font-medium disabled:opacity-50"
+              >
+                {statusSaving ? "Saving..." : "Save status"}
+              </button>
+            </div>
+          </div>
         )}
       </main>
     </>
