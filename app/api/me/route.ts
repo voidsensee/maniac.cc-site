@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
       hwidResets: true,
       subscriptionType: true,
       subscriptionUntil: true,
+      balance: true,
     },
   });
 
