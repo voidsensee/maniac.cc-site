@@ -39,7 +39,7 @@ export default function Navbar() {
               <Link href="/shop" className="text-white/70 transition hover:text-white">
                 Shop
               </Link>
-              <Link href="/support" className="text-white/70 transition hover:text-white">
+              <Link href="/tickets" className="text-white/70 transition hover:text-white">
                 Support
               </Link>
               {isStaff && (
