@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Starfield from "@/components/Starfield";
 import Navbar from "@/components/Navbar";
+import { StatusBadge } from "@/components/StatusBadge";
 import { toast } from "sonner";
 import { formatMani, MANI_TO_DAYS } from "@/lib/currency";
 
@@ -21,6 +22,12 @@ type Me = {
   balance: number;
 };
 
+type Status = {
+  state: string;
+  message: string | null;
+  updatedAt: string;
+};
+
 const LABELS: Record<string, string> = {
   none: "No subscription",
   gta_v_altv_7d: "GTA V / alt:V — 7 days",
@@ -31,6 +38,7 @@ const LABELS: Record<string, string> = {
 export default function Dashboard() {
   const router = useRouter();
   const [me, setMe] = useState<Me | null>(null);
+  const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -53,6 +61,11 @@ export default function Dashboard() {
         setLoading(false);
       })
       .catch(() => router.push("/login"));
+
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then((d) => setStatus(d.status))
+      .catch(() => {});
   }, [router]);
 
   const reloadMe = async () => {
@@ -182,6 +195,23 @@ export default function Dashboard() {
         <h1 className="animate-fade-in text-3xl font-bold">Dashboard</h1>
         <p className="mt-1 text-sm text-white/50">Welcome back, {me.username}.</p>
 
+        {status && (
+          <div className="glass mt-6 flex flex-col gap-4 rounded-2xl p-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm uppercase tracking-wider text-white/40">
+                Cheat Status
+              </h2>
+              <p className="mt-2 text-sm text-white/70">
+                {status.message || "All systems operational"}
+              </p>
+              <p className="mt-1 text-xs text-white/30">
+                Updated {new Date(status.updatedAt).toLocaleString()}
+              </p>
+            </div>
+            <StatusBadge state={status.state} size="lg" />
+          </div>
+        )}
+
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           <div className="glass animate-fade-in rounded-2xl p-6">
             <h2 className="text-sm uppercase tracking-wider text-white/40">Account</h2>
@@ -285,14 +315,23 @@ export default function Dashboard() {
           </button>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <button
-            onClick={() => router.push("/password")}
+            onClick={() => router.push("/shop")}
             className="glass animate-fade-in rounded-2xl p-6 text-left hover:border-accent-purple transition"
           >
-            <h2 className="text-sm uppercase tracking-wider text-white/40">Security</h2>
-            <p className="mt-2 text-base font-medium">Change Password</p>
-            <p className="mt-1 text-xs text-white/40">Update your account password</p>
+            <h2 className="text-sm uppercase tracking-wider text-white/40">Store</h2>
+            <p className="mt-2 text-base font-medium">Shop</p>
+            <p className="mt-1 text-xs text-white/40">Buy software with Mani</p>
+          </button>
+
+          <button
+            onClick={() => router.push("/invites")}
+            className="glass animate-fade-in rounded-2xl p-6 text-left hover:border-accent-purple transition"
+          >
+            <h2 className="text-sm uppercase tracking-wider text-white/40">Referral</h2>
+            <p className="mt-2 text-base font-medium">Invites</p>
+            <p className="mt-1 text-xs text-white/40">Earn 10% from your friends</p>
           </button>
 
           <button
@@ -305,12 +344,12 @@ export default function Dashboard() {
           </button>
 
           <button
-            onClick={() => router.push("/invites")}
+            onClick={() => router.push("/password")}
             className="glass animate-fade-in rounded-2xl p-6 text-left hover:border-accent-purple transition"
           >
-            <h2 className="text-sm uppercase tracking-wider text-white/40">Referral</h2>
-            <p className="mt-2 text-base font-medium">Invites</p>
-            <p className="mt-1 text-xs text-white/40">Earn 10% from your friends</p>
+            <h2 className="text-sm uppercase tracking-wider text-white/40">Security</h2>
+            <p className="mt-2 text-base font-medium">Change Password</p>
+            <p className="mt-1 text-xs text-white/40">Update your account password</p>
           </button>
         </div>
       </main>
