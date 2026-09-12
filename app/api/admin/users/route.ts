@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser, hashPassword } from "@/lib/auth";
+import { isProtected, isStaff as roleIsStaff, isAdmin as roleIsAdmin, ROLES } from "@/lib/roles";
 
 export async function GET(req: NextRequest) {
   const auth = getAuthUser(req);
   if (!auth) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const isStaff = auth.role === "admin" || auth.role === "support";
-  if (!isStaff) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!roleIsStaff(auth.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -26,25 +28,41 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({ ok: true, users });
+  // Скрываем founder от всех, кроме самого founder
+  const filtered = auth.role === "founder"
+    ? users
+    : users.filter((u) => u.role !== "founder");
+
+  return NextResponse.json({ ok: true, users: filtered });
 }
 
 export async function PATCH(req: NextRequest) {
   const auth = getAuthUser(req);
   if (!auth) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const isStaff = auth.role === "admin" || auth.role === "support";
-  if (!isStaff) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!roleIsStaff(auth.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const body = await req.json();
   const { userId, action } = body;
   if (!userId || !action)
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
 
+  // ЗАЩИТА: нельзя трогать founder
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target) {
+    return NextResponse.json({ error: "user not found" }, { status: 404 });
+  }
+  if (isProtected(target.role) && auth.role !== "founder") {
+    return NextResponse.json({ error: "protected user" }, { status: 403 });
+  }
+
+  // Действия, доступные только админам (не moderator/support)
   const adminOnly = [
     "make_admin",
-    "make_user",
-    "make_support",
+    "make_founder",
+    "set_role",
     "give_7d",
     "give_30d",
     "give_lifetime",
@@ -55,7 +73,13 @@ export async function PATCH(req: NextRequest) {
     "remove_balance",
     "set_balance",
   ];
-  if (adminOnly.includes(action) && auth.role !== "admin") {
+  if (adminOnly.includes(action) && !roleIsAdmin(auth.role)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // founder-действия — только founder
+  const founderOnly = ["make_founder"];
+  if (founderOnly.includes(action) && auth.role !== "founder") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -66,6 +90,18 @@ export async function PATCH(req: NextRequest) {
       await prisma.user.update({ where: { id: userId }, data: { banned: false } });
     } else if (action === "reset_hwid") {
       await prisma.user.update({ where: { id: userId }, data: { hwid: null } });
+    } else if (action === "set_role") {
+      const { role } = body;
+      if (!role || !(role in ROLES)) {
+        return NextResponse.json({ error: "invalid role" }, { status: 400 });
+      }
+      // Только founder может назначить founder
+      if (role === "founder" && auth.role !== "founder") {
+        return NextResponse.json({ error: "forbidden" }, { status: 403 });
+      }
+      await prisma.user.update({ where: { id: userId }, data: { role } });
+    } else if (action === "make_founder") {
+      await prisma.user.update({ where: { id: userId }, data: { role: "founder" } });
     } else if (action === "make_admin") {
       await prisma.user.update({ where: { id: userId }, data: { role: "admin" } });
     } else if (action === "make_user") {
@@ -107,16 +143,10 @@ export async function PATCH(req: NextRequest) {
     } else if (action === "change_username") {
       const { username } = body;
       if (!username || username.length < 3 || username.length > 32) {
-        return NextResponse.json(
-          { error: "username must be 3-32 chars" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "username 3-32 chars" }, { status: 400 });
       }
       if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        return NextResponse.json(
-          { error: "letters, digits, underscore only" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "letters, digits, underscore only" }, { status: 400 });
       }
       const existing = await prisma.user.findUnique({ where: { username } });
       if (existing && existing.id !== userId) {
@@ -202,13 +232,16 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  await prisma.log.create({
-    data: {
-      userId: auth.uid,
-      action: `admin_${action}`,
-      ip: req.headers.get("x-forwarded-for") ?? undefined,
-    },
-  });
+  // Логируем действие только если это не founder
+  if (auth.role !== "founder") {
+    await prisma.log.create({
+      data: {
+        userId: auth.uid,
+        action: `admin_${action}`,
+        ip: req.headers.get("x-forwarded-for") ?? undefined,
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
