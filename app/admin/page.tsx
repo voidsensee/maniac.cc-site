@@ -7,6 +7,7 @@ import Starfield from "@/components/Starfield";
 import Navbar from "@/components/Navbar";
 import { toast } from "sonner";
 import { formatMani } from "@/lib/currency";
+import { ROLES } from "@/lib/roles";
 
 type User = {
   id: string;
@@ -40,6 +41,16 @@ const SUB_LABELS: Record<string, string> = {
   gta_v_altv_lifetime: "lifetime",
 };
 
+const ASSIGNABLE_ROLES = [
+  "user",
+  "tester",
+  "moderator",
+  "support",
+  "finance",
+  "developer",
+  "admin",
+];
+
 export default function Admin() {
   const router = useRouter();
   const [tab, setTab] = useState<"users" | "invites">("users");
@@ -60,7 +71,7 @@ export default function Admin() {
     if (!res.ok) return router.push("/login");
     const d = await res.json();
     const role = d.user.role;
-    if (role !== "admin" && role !== "support") return router.push("/dashboard");
+    if (role === "user" || role === "banned" || role === "tester") return router.push("/dashboard");
     setMe({ role });
   };
 
@@ -107,11 +118,8 @@ export default function Admin() {
       body: JSON.stringify({ userId, action, ...extra }),
     });
     const d = await res.json();
-    if (!res.ok) {
-      toast.error(d.error || "failed");
-    } else {
-      toast.success("Done");
-    }
+    if (!res.ok) toast.error(d.error || "failed");
+    else toast.success("Done");
     await loadUsers();
   };
 
@@ -144,6 +152,12 @@ export default function Admin() {
     const amt = prompt(`Set Mani for ${u.username}:`, String(u.balance));
     if (!amt) return;
     await userAction(u.id, "set_balance", { amount: Number(amt) });
+  };
+
+  const setRole = async (u: User, role: string) => {
+    if (role === u.role) return;
+    if (!confirm(`Change role of ${u.username} to "${role}"?`)) return;
+    await userAction(u.id, "set_role", { role });
   };
 
   const generateInvites = async () => {
@@ -185,7 +199,8 @@ export default function Admin() {
     );
   }
 
-  const isAdmin = me?.role === "admin";
+  const isAdmin = me?.role === "admin" || me?.role === "founder";
+  const isFounder = me?.role === "founder";
 
   return (
     <>
@@ -231,94 +246,108 @@ export default function Admin() {
                   <th className="px-4 py-3">Sub</th>
                   <th className="px-4 py-3">Until</th>
                   <th className="px-4 py-3">Balance</th>
-                  <th className="px-4 py-3">HWID</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((u) => (
-                  <tr key={u.id} className="border-b border-white/5 hover:bg-white/5">
-                    <td className="px-4 py-3 font-mono text-[10px] text-white/30">
-                      {u.id.slice(0, 8)}
-                    </td>
-                    <td className="px-4 py-3 font-medium">{u.username}</td>
-                    <td className="px-4 py-3 text-white/60">{u.role}</td>
-                    <td className="px-4 py-3 text-white/60">
-                      {SUB_LABELS[u.subscriptionType || "none"] ||
-                        u.subscriptionType ||
-                        "—"}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-white/50">
-                      {u.subscriptionType?.endsWith("_lifetime")
-                        ? "∞"
-                        : u.subscriptionUntil
-                        ? new Date(u.subscriptionUntil).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-amber-300">
-                      {formatMani(u.balance)}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-white/50">
-                      {u.hwid ? u.hwid.slice(0, 10) + "..." : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {u.banned ? (
-                        <span className="text-red-400">BANNED</span>
-                      ) : (
-                        <span className="text-emerald-400">Active</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {u.banned ? (
-                          <Btn onClick={() => userAction(u.id, "unban")}>Unban</Btn>
+                {users.map((u) => {
+                  const isFounderRow = u.role === "founder";
+                  return (
+                    <tr
+                      key={u.id}
+                      className={`border-b border-white/5 ${
+                        isFounderRow ? "bg-amber-500/5" : "hover:bg-white/5"
+                      }`}
+                    >
+                      <td className="px-4 py-3 font-mono text-[10px] text-white/30">
+                        {u.id.slice(0, 8)}
+                      </td>
+                      <td className="px-4 py-3 font-medium">
+                        {u.username}
+                        {isFounderRow && (
+                          <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                            FOUNDER
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-white/60">
+                        {isFounderRow ? (
+                          "founder"
+                        ) : isAdmin ? (
+                          <select
+                            value={u.role}
+                            onChange={(e) => setRole(u, e.target.value)}
+                            className="rounded border border-white/10 bg-black/40 px-2 py-1 text-xs"
+                          >
+                            {ASSIGNABLE_ROLES.map((r) => (
+                              <option key={r} value={r}>
+                                {r}
+                              </option>
+                            ))}
+                            {isFounder && (
+                              <option value="founder">founder</option>
+                            )}
+                          </select>
                         ) : (
-                          <Btn onClick={() => userAction(u.id, "ban")}>Ban</Btn>
+                          u.role
                         )}
-                        <Btn onClick={() => userAction(u.id, "reset_hwid")}>Reset HWID</Btn>
-                        {isAdmin && (
-                          <>
-                            <Btn onClick={() => userAction(u.id, "give_7d")}>+7d</Btn>
-                            <Btn onClick={() => userAction(u.id, "give_30d")}>+30d</Btn>
-                            <Btn onClick={() => userAction(u.id, "give_lifetime")}>+Life</Btn>
-                            <Btn onClick={() => userAction(u.id, "revoke_sub")}>Revoke</Btn>
-                            <Btn onClick={() => addBalance(u)}>+Ɱ</Btn>
-                            <Btn onClick={() => removeBalance(u)}>-Ɱ</Btn>
-                            <Btn onClick={() => setBalance(u)}>=Ɱ</Btn>
-                            <Btn onClick={() => changeUsername(u)}>✎ Name</Btn>
-                            <Btn onClick={() => changePassword(u)}>✎ Pass</Btn>
-                            {u.role === "user" && (
-                              <>
-                                <Btn onClick={() => userAction(u.id, "make_support")}>
-                                  +Support
-                                </Btn>
-                                <Btn onClick={() => userAction(u.id, "make_admin")}>
-                                  +Admin
-                                </Btn>
-                              </>
-                            )}
-                            {u.role === "support" && (
-                              <>
-                                <Btn onClick={() => userAction(u.id, "make_user")}>
-                                  -Support
-                                </Btn>
-                                <Btn onClick={() => userAction(u.id, "make_admin")}>
-                                  +Admin
-                                </Btn>
-                              </>
-                            )}
-                            {u.role === "admin" && (
-                              <Btn onClick={() => userAction(u.id, "make_user")}>
-                                -Admin
-                              </Btn>
-                            )}
-                          </>
+                      </td>
+                      <td className="px-4 py-3 text-white/60">
+                        {SUB_LABELS[u.subscriptionType || "none"] ||
+                          u.subscriptionType ||
+                          "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-white/50">
+                        {u.subscriptionType?.endsWith("_lifetime")
+                          ? "∞"
+                          : u.subscriptionUntil
+                          ? new Date(u.subscriptionUntil).toLocaleDateString()
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-amber-300">
+                        {formatMani(u.balance)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {u.banned ? (
+                          <span className="text-red-400">BANNED</span>
+                        ) : (
+                          <span className="text-emerald-400">Active</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {!isFounderRow && (
+                            <>
+                              {u.banned ? (
+                                <Btn onClick={() => userAction(u.id, "unban")}>Unban</Btn>
+                              ) : (
+                                <Btn onClick={() => userAction(u.id, "ban")}>Ban</Btn>
+                              )}
+                              <Btn onClick={() => userAction(u.id, "reset_hwid")}>Reset HWID</Btn>
+                              {isAdmin && (
+                                <>
+                                  <Btn onClick={() => userAction(u.id, "give_7d")}>+7d</Btn>
+                                  <Btn onClick={() => userAction(u.id, "give_30d")}>+30d</Btn>
+                                  <Btn onClick={() => userAction(u.id, "give_lifetime")}>+Life</Btn>
+                                  <Btn onClick={() => userAction(u.id, "revoke_sub")}>Revoke</Btn>
+                                  <Btn onClick={() => addBalance(u)}>+Ɱ</Btn>
+                                  <Btn onClick={() => removeBalance(u)}>-Ɱ</Btn>
+                                  <Btn onClick={() => setBalance(u)}>=Ɱ</Btn>
+                                  <Btn onClick={() => changeUsername(u)}>✎ Name</Btn>
+                                  <Btn onClick={() => changePassword(u)}>✎ Pass</Btn>
+                                </>
+                              )}
+                            </>
+                          )}
+                          {isFounderRow && (
+                            <span className="text-xs text-white/30">protected</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
