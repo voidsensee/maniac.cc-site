@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Starfield from "@/components/Starfield";
 import Navbar from "@/components/Navbar";
+import { toast } from "sonner";
+import { formatMani, MANI_TO_DAYS } from "@/lib/currency";
 
 type Me = {
   id: string;
@@ -16,6 +18,7 @@ type Me = {
   hwidResets: number;
   subscriptionType: string | null;
   subscriptionUntil: string | null;
+  balance: number;
 };
 
 const LABELS: Record<string, string> = {
@@ -30,6 +33,7 @@ export default function Dashboard() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [buying, setBuying] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -51,6 +55,16 @@ export default function Dashboard() {
       .catch(() => router.push("/login"));
   }, [router]);
 
+  const reloadMe = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    const res = await fetch("/api/me", { headers: { Authorization: `Bearer ${token}` } });
+    if (res.ok) {
+      const d = await res.json();
+      setMe(d.user);
+    }
+  };
+
   const resetHwid = async () => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -59,11 +73,11 @@ export default function Dashboard() {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (res.ok) {
-      setMe((m) => (m ? { ...m, hwid: null, hwidResets: m.hwidResets + 1 } : m));
-      alert("HWID reset successfully");
+      toast.success("HWID reset successfully");
+      reloadMe();
     } else {
       const d = await res.json();
-      alert(d.error || "reset failed");
+      toast.error(d.error || "reset failed");
     }
   };
 
@@ -80,7 +94,7 @@ export default function Dashboard() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "download failed" }));
-        alert(`${err.error}${err.status ? ` (${err.status})` : ""}`);
+        toast.error(`${err.error}${err.status ? ` (${err.status})` : ""}`);
         return;
       }
       const cd = res.headers.get("Content-Disposition") || "";
@@ -95,8 +109,34 @@ export default function Dashboard() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      toast.success("Download started");
     } finally {
       setDownloading(false);
+    }
+  };
+
+  const buyItem = async (price: number) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    setBuying(true);
+    try {
+      const res = await fetch("/api/shop/buy", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ price }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success("Subscription purchased");
+        reloadMe();
+      } else {
+        toast.error(d.error || "purchase failed");
+      }
+    } finally {
+      setBuying(false);
     }
   };
 
@@ -112,7 +152,6 @@ export default function Dashboard() {
     );
   }
 
-  // Подписка
   const subType = me.subscriptionType || "none";
   const isLifetime = subType.endsWith("_lifetime");
   const label = LABELS[subType] || "No subscription";
@@ -175,6 +214,40 @@ export default function Dashboard() {
             </div>
             <div className={`mt-6 text-center text-2xl font-bold ${subColor}`}>
               {subLabel}
+            </div>
+          </div>
+
+          <div className="glass animate-fade-in rounded-2xl p-6 md:col-span-2">
+            <h2 className="text-sm uppercase tracking-wider text-white/40">Balance</h2>
+            <div className="mt-4 flex items-center justify-between">
+              <div className="text-3xl font-bold">{formatMani(me.balance)}</div>
+              <button
+                onClick={() => router.push("/topup")}
+                className="rounded-lg border border-white/10 px-4 py-2 text-xs text-white/70 hover:border-accent-purple hover:text-white"
+              >
+                Top up
+              </button>
+            </div>
+
+            <div className="mt-6">
+              <h3 className="text-xs uppercase tracking-wider text-white/40 mb-3">
+                Buy subscription
+              </h3>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {Object.entries(MANI_TO_DAYS).map(([price, item]) => (
+                  <button
+                    key={price}
+                    onClick={() => buyItem(Number(price))}
+                    disabled={buying || me.balance < Number(price)}
+                    className="rounded-xl border border-white/10 p-4 text-left transition hover:border-accent-purple disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <div className="text-xs uppercase tracking-wider text-white/40">
+                      {item.label}
+                    </div>
+                    <div className="mt-2 text-lg font-bold">{formatMani(Number(price))}</div>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
