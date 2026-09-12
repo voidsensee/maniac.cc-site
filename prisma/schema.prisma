@@ -98,3 +98,11 @@ model Transaction {
   @@index([userId])
   @@index([type])
 }
+
+model Status {
+  id        String   @id @default("singleton")
+  state     String   @default("undetected")
+  message   String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
