@@ -28,12 +28,7 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  // Скрываем founder от всех, кроме самого founder
-  const filtered = auth.role === "founder"
-    ? users
-    : users.filter((u) => u.role !== "founder");
-
-  return NextResponse.json({ ok: true, users: filtered });
+  return NextResponse.json({ ok: true, users });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -49,7 +44,7 @@ export async function PATCH(req: NextRequest) {
   if (!userId || !action)
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
 
-  // ЗАЩИТА: нельзя трогать founder
+  // ЗАЩИТА: нельзя трогать founder (кроме самого founder)
   const target = await prisma.user.findUnique({ where: { id: userId } });
   if (!target) {
     return NextResponse.json({ error: "user not found" }, { status: 404 });
@@ -58,7 +53,6 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "protected user" }, { status: 403 });
   }
 
-  // Действия, доступные только админам (не moderator/support)
   const adminOnly = [
     "make_admin",
     "make_founder",
@@ -77,9 +71,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // founder-действия — только founder
-  const founderOnly = ["make_founder"];
-  if (founderOnly.includes(action) && auth.role !== "founder") {
+  // make_founder — только founder
+  if (action === "make_founder" && auth.role !== "founder") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -95,7 +88,6 @@ export async function PATCH(req: NextRequest) {
       if (!role || !(role in ROLES)) {
         return NextResponse.json({ error: "invalid role" }, { status: 400 });
       }
-      // Только founder может назначить founder
       if (role === "founder" && auth.role !== "founder") {
         return NextResponse.json({ error: "forbidden" }, { status: 403 });
       }
@@ -232,7 +224,6 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
-  // Логируем действие только если это не founder
   if (auth.role !== "founder") {
     await prisma.log.create({
       data: {
