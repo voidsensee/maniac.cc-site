@@ -36,6 +36,16 @@ type Invite = {
   createdAt: string;
 };
 
+type Changelog = {
+  id: string;
+  version: string;
+  title: string;
+  body: string;
+  type: string;
+  published: boolean;
+  createdAt: string;
+};
+
 const SUB_LABELS: Record<string, string> = {
   none: "—",
   gta_v_altv_7d: "7d",
@@ -55,7 +65,7 @@ const ASSIGNABLE_ROLES = [
 
 export default function Admin() {
   const router = useRouter();
-  const [tab, setTab] = useState<"users" | "invites" | "status">("users");
+  const [tab, setTab] = useState<"users" | "invites" | "status" | "changelog">("users");
   const [me, setMe] = useState<{ role: string } | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
@@ -69,6 +79,16 @@ export default function Admin() {
   const [statusMessage, setStatusMessage] = useState("");
   const [statusSaving, setStatusSaving] = useState(false);
 
+  // changelog
+  const [changelogs, setChangelogs] = useState<Changelog[]>([]);
+  const [clVersion, setClVersion] = useState("");
+  const [clTitle, setClTitle] = useState("");
+  const [clBody, setClBody] = useState("");
+  const [clType, setClType] = useState("update");
+  const [clPublished, setClPublished] = useState(true);
+  const [clSaving, setClSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const token = () => localStorage.getItem("token");
 
   const loadMe = async () => {
@@ -78,7 +98,9 @@ export default function Admin() {
     if (!res.ok) return router.push("/login");
     const d = await res.json();
     const role = d.user.role;
-    if (role === "user" || role === "banned" || role === "tester") return router.push("/dashboard");
+    if (role === "user" || role === "banned" || role === "tester") {
+      return router.push("/dashboard");
+    }
     setMe({ role });
   };
 
@@ -109,11 +131,20 @@ export default function Admin() {
     }
   };
 
+  const loadChangelogs = async () => {
+    const res = await fetch("/api/changelog");
+    if (res.ok) {
+      const d = await res.json();
+      setChangelogs(d.entries);
+    }
+  };
+
   const load = async () => {
     await loadMe();
     await loadUsers();
     await loadInvites();
     await loadStatus();
+    await loadChangelogs();
     setLoading(false);
   };
 
@@ -226,6 +257,69 @@ export default function Admin() {
     }
   };
 
+  const saveChangelog = async () => {
+    const t = token();
+    if (!t) return;
+    if (!clVersion || !clTitle || !clBody) {
+      return toast.error("Fill version, title, and body");
+    }
+    setClSaving(true);
+    try {
+      const isEdit = !!editingId;
+      const res = await fetch("/api/admin/changelog", {
+        method: isEdit ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${t}`,
+        },
+        body: JSON.stringify({
+          id: editingId || undefined,
+          version: clVersion,
+          title: clTitle,
+          body: clBody,
+          type: clType,
+          published: clPublished,
+        }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        toast.success(isEdit ? "Entry updated" : "Entry created");
+        setClVersion("");
+        setClTitle("");
+        setClBody("");
+        setClType("update");
+        setClPublished(true);
+        setEditingId(null);
+        await loadChangelogs();
+      } else {
+        toast.error(d.error || "failed");
+      }
+    } finally {
+      setClSaving(false);
+    }
+  };
+
+  const editChangelog = (e: Changelog) => {
+    setEditingId(e.id);
+    setClVersion(e.version);
+    setClTitle(e.title);
+    setClBody(e.body);
+    setClType(e.type);
+    setClPublished(e.published);
+  };
+
+  const deleteChangelog = async (id: string) => {
+    if (!confirm("Delete this entry?")) return;
+    const t = token();
+    if (!t) return;
+    await fetch("/api/admin/changelog", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` },
+      body: JSON.stringify({ id }),
+    });
+    await loadChangelogs();
+  };
+
   const copy = (text: string) => navigator.clipboard.writeText(text);
 
   if (loading) {
@@ -251,7 +345,7 @@ export default function Admin() {
       <main className="mx-auto max-w-7xl px-6 py-12">
         <h1 className="animate-fade-in text-3xl font-bold">Admin</h1>
 
-        <div className="mt-6 flex gap-2">
+        <div className="mt-6 flex flex-wrap gap-2">
           <button
             onClick={() => setTab("users")}
             className={`rounded-lg px-4 py-2 text-sm transition ${
@@ -275,6 +369,14 @@ export default function Admin() {
             }`}
           >
             Status
+          </button>
+          <button
+            onClick={() => setTab("changelog")}
+            className={`rounded-lg px-4 py-2 text-sm transition ${
+              tab === "changelog" ? "btn-primary" : "glass text-white/70 hover:text-white"
+            }`}
+          >
+            Changelog ({changelogs.length})
           </button>
           <Link
             href="/admin/tickets"
@@ -543,6 +645,121 @@ export default function Admin() {
               >
                 {statusSaving ? "Saving..." : "Save status"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {tab === "changelog" && isAdmin && (
+          <div className="mt-6 grid gap-6 lg:grid-cols-5">
+            <div className="glass animate-fade-in rounded-2xl p-6 lg:col-span-2">
+              <h2 className="text-sm uppercase tracking-wider text-white/40">
+                {editingId ? "Edit entry" : "New entry"}
+              </h2>
+
+              <div className="mt-4 space-y-4">
+                <input
+                  placeholder="Version (e.g. 1.2.3)"
+                  value={clVersion}
+                  onChange={(e) => setClVersion(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm"
+                />
+                <input
+                  placeholder="Title"
+                  value={clTitle}
+                  onChange={(e) => setClTitle(e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm"
+                />
+                <textarea
+                  placeholder="Description..."
+                  value={clBody}
+                  onChange={(e) => setClBody(e.target.value)}
+                  rows={8}
+                  className="w-full rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={clType}
+                    onChange={(e) => setClType(e.target.value)}
+                    className="rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm"
+                  >
+                    <option value="update">Update</option>
+                    <option value="feature">Feature</option>
+                    <option value="fix">Fix</option>
+                    <option value="breaking">Breaking</option>
+                    <option value="security">Security</option>
+                  </select>
+                  <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-4 py-2.5 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={clPublished}
+                      onChange={(e) => setClPublished(e.target.checked)}
+                      className="accent-accent-purple"
+                    />
+                    Published
+                  </label>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveChangelog}
+                    disabled={clSaving}
+                    className="btn-primary flex-1 rounded-lg py-2.5 text-sm font-medium disabled:opacity-50"
+                  >
+                    {clSaving ? "..." : editingId ? "Save changes" : "Create"}
+                  </button>
+                  {editingId && (
+                    <button
+                      onClick={() => {
+                        setEditingId(null);
+                        setClVersion("");
+                        setClTitle("");
+                        setClBody("");
+                      }}
+                      className="glass rounded-lg px-4 py-2.5 text-sm text-white/70 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="glass animate-fade-in rounded-2xl p-6 lg:col-span-3">
+              <h2 className="text-sm uppercase tracking-wider text-white/40">
+                Entries ({changelogs.length})
+              </h2>
+              <div className="mt-4 space-y-3 max-h-[600px] overflow-y-auto">
+                {changelogs.length === 0 ? (
+                  <p className="text-center text-sm text-white/30 py-8">No entries yet.</p>
+                ) : (
+                  changelogs.map((c) => (
+                    <div key={c.id} className="rounded-lg border border-white/10 p-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm font-bold text-accent-purple">
+                          {c.version}
+                        </span>
+                        <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-white/50">
+                          {c.type}
+                        </span>
+                        {!c.published && (
+                          <span className="rounded bg-red-500/10 px-2 py-0.5 text-[10px] uppercase text-red-300">
+                            draft
+                          </span>
+                        )}
+                        <span className="ml-auto text-[10px] text-white/30">
+                          {new Date(c.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-sm font-medium">{c.title}</div>
+                      <div className="mt-1 text-xs text-white/50 line-clamp-2">{c.body}</div>
+                      <div className="mt-3 flex gap-1">
+                        <Btn onClick={() => editChangelog(c)}>Edit</Btn>
+                        <Btn onClick={() => deleteChangelog(c.id)}>Delete</Btn>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         )}
